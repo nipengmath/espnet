@@ -14,6 +14,9 @@ import sys
 
 import numpy as np
 
+DIRNAME = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.realpath(os.path.join(DIRNAME, "../../")))
+
 
 def main():
     parser = argparse.ArgumentParser()

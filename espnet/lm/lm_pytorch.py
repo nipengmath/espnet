@@ -14,6 +14,7 @@ import json
 import logging
 import numpy as np
 import six
+import os
 
 import torch
 import torch.nn as nn
@@ -24,6 +25,13 @@ from chainer.dataset import convert
 from chainer import reporter
 from chainer import training
 from chainer.training import extensions
+
+DIRNAME = os.path.dirname(os.path.realpath(__file__))
+
+import sys
+sys.path.insert(0, os.path.realpath(os.path.join(DIRNAME, "../../")))
+
+print("==============", sys.executable)
 
 from espnet.lm.lm_utils import compute_perplexity
 from espnet.lm.lm_utils import count_tokens

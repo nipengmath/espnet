@@ -39,7 +39,7 @@ from espnet.nets.e2e_asr_th import Loss
 from espnet.nets.e2e_asr_th import pad_list
 
 # for kaldi io
-import kaldi_io_py
+import kaldi_io as kaldi_io_py
 
 # rnnlm
 import espnet.lm.extlm_pytorch as extlm_pytorch
@@ -433,7 +433,7 @@ def recog(args):
         js = json.load(f)['utts']
     new_js = {}
 
-    if args.batchsize is None:
+    if not args.batchsize:
         with torch.no_grad():
             for idx, name in enumerate(js.keys(), 1):
                 logging.info('(%d/%d) decoding ' + name, idx, len(js.keys()))

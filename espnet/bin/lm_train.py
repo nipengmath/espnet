@@ -18,6 +18,8 @@ import random
 import subprocess
 import sys
 
+DIRNAME = os.path.dirname(os.path.realpath(__file__))
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -117,7 +119,10 @@ def main():
         from espnet.lm.lm_chainer import train
         train(args)
     elif args.backend == "pytorch":
-        from espnet.lm.lm_pytorch import train
+        sys.path.insert(0, os.path.realpath(os.path.join(DIRNAME, "../lm")))
+        print(sys.path)
+        #from espnet.lm.lm_pytorch import train
+        from lm_pytorch import train
         train(args)
     else:
         raise ValueError("chainer and pytorch are only supported.")
