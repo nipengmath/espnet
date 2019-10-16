@@ -62,7 +62,7 @@ accum-grad: 2
 grad-clip: 1.0
 weight-decay: 0.0
 patience: 0
-epochs: 1000  # 1,000 epochs * 330 batches / 2 accum-grad = 165,000 iters
+epochs: 500  # 1,000 epochs * 330 batches / 2 accum-grad = 165,000 iters
 
 # other
 save-interval-epoch: 10

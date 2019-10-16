@@ -14,14 +14,16 @@ fi
 aishell_audio_dir=$1
 aishell_text=$2/aishell_transcript_v0.8.txt.0604.relabeled.0923.v2
 
-train_dir=data/local/train
-dev_dir=data/local/dev
-test_dir=data/local/test
+#train_dir=data/local/train
+#dev_dir=data/local/dev
+#test_dir=data/local/test
+infer_dir=data/local/infer
 tmp_dir=data/local/tmp
 
-mkdir -p $train_dir
-mkdir -p $dev_dir
-mkdir -p $test_dir
+#mkdir -p $train_dir
+#mkdir -p $dev_dir
+#mkdir -p $test_dir
+mkdir -p $infer_dir
 mkdir -p $tmp_dir
 
 # data directory check
@@ -33,17 +35,15 @@ fi
 # find wav audio file for train, dev and test resp.
 find $aishell_audio_dir -iname "*.wav" > $tmp_dir/wav.flist
 n=`cat $tmp_dir/wav.flist | wc -l`
-[ $n -ne 141925 ] && \
-  echo Warning: expected 141925 data data files, found $n
+# [ $n -ne 141925 ] && \
+#   echo Warning: expected 141925 data data files, found $n
 
-grep -i "wav/train" $tmp_dir/wav.flist > $train_dir/wav.flist || exit 1;
-grep -i "wav/dev" $tmp_dir/wav.flist > $dev_dir/wav.flist || exit 1;
-grep -i "wav/test" $tmp_dir/wav.flist > $test_dir/wav.flist || exit 1;
+grep -i "wav/infer" $tmp_dir/wav.flist > $infer_dir/wav.flist || exit 1;
 
 rm -r $tmp_dir
 
 # Transcriptions preparation
-for dir in $train_dir $dev_dir $test_dir; do
+for dir in $infer_dir; do
   echo Preparing $dir transcriptions
   sed -e 's/\.wav//' $dir/wav.flist | awk -F '/' '{print $NF}' > $dir/utt.list
   sed -e 's/\.wav//' $dir/wav.flist | awk -F '/' '{i=NF-1;printf("%s %s\n",$NF,$i)}' > $dir/utt2spk_all
@@ -56,12 +56,10 @@ for dir in $train_dir $dev_dir $test_dir; do
   utils/utt2spk_to_spk2utt.pl $dir/utt2spk > $dir/spk2utt
 done
 
-mkdir -p data/train data/dev data/test
+mkdir -p data/infer
 
 for f in spk2utt utt2spk wav.scp text; do
-  cp $train_dir/$f data/train/$f || exit 1;
-  cp $dev_dir/$f data/dev/$f || exit 1;
-  cp $test_dir/$f data/test/$f || exit 1;
+  cp $infer_dir/$f data/infer/$f || exit 1;
 done
 
 echo "$0: AISHELL data preparation succeeded"

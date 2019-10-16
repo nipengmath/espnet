@@ -8,9 +8,9 @@
 
 # general configuration
 backend=pytorch
-stage=-1
+stage=4
 stop_stage=100
-ngpu=1       # number of gpus ("0" uses cpu, otherwise use gpu)
+ngpu=4       # number of gpus ("0" uses cpu, otherwise use gpu)
 nj=32        # numebr of parallel jobs
 dumpdir=dump # directory to dump full features
 verbose=0    # verbose option (if set > 0, get more log)
@@ -28,9 +28,12 @@ n_shift=256   # number of shift points
 win_length="" # window length
 
 # config files
-train_config=conf/train_pytorch_tacotron2.yaml # you can select from conf or conf/tuning.
-                                               # now we support tacotron2, transformer, and fastspeech
-                                               # see more info in the header of each config.
+# you can select from conf or conf/tuning.
+# now we support tacotron2, transformer, and fastspeech
+# see more info in the header of each config.
+train_config=conf/tuning/train_pytorch_transformer.v1.yaml
+# train_config=conf/tuning/train_fastspeech.v1.yaml
+
 decode_config=conf/decode.yaml
 
 # decoding related
@@ -52,20 +55,21 @@ set -e
 set -u
 set -o pipefail
 
+corpus_path="/data/nipeng/TTS/data/fake_lj_nosil"
 train_set="train_no_dev"
 dev_set="dev"
 eval_set="eval"
 
-if [ ${stage} -le -1 ] && [ ${stop_stage} -ge -1 ]; then
-    echo "stage -1: Data Download"
-    local/download.sh ${db_root}
-fi
+# if [ ${stage} -le -1 ] && [ ${stop_stage} -ge -1 ]; then
+#     echo "stage -1: Data Download"
+#     local/download.sh ${db_root}
+# fi
 
 if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
     ### Task dependent. You have to make data the following preparation part by yourself.
     ### But you can utilize Kaldi recipes in most cases
     echo "stage 0: Data preparation"
-    local/data_prep.sh ${db_root}/LJSpeech-1.1 data/train
+    local/data_prep.sh ${corpus_path} data/train
     utils/validate_data_dir.sh --no-feats data/train
 fi
 
