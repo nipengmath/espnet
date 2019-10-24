@@ -12,7 +12,7 @@ if [ $# != 2 ]; then
 fi
 
 aishell_audio_dir=$1
-aishell_text=$2/aishell_transcript_v0.8.txt.0604.relabeled.0923.v2
+aishell_text=$2/aishell_transcript_v0.8.txt.add10w.20190918.tune_high_medium_lv.v2
 
 train_dir=data/local/train
 dev_dir=data/local/dev

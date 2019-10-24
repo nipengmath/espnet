@@ -8,10 +8,10 @@
 
 # general configuration
 backend=pytorch
-stage=5        # start from 0 if you need to start from data preparation
-stop_stage=5
-export CUDA_VISIBLE_DEVICES=0,2,3
-ngpu=3         # number of gpus ("0" uses cpu, otherwise use gpu)
+stage=0        # start from 0 if you need to start from data preparation
+stop_stage=100
+# export CUDA_VISIBLE_DEVICES=0,2,3
+ngpu=4         # number of gpus ("0" uses cpu, otherwise use gpu)
 debugmode=1
 dumpdir=dump   # directory to dump full features
 N=0            # number of minibatches to be used (mainly for debugging). "0" uses all minibatches.

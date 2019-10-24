@@ -36,7 +36,8 @@ n_average=10
 #data=/export/a05/xna/data
 #data_url=www.openslr.org/resources/33
 
-data=/data/nipeng/2019-10-07-aishell
+# data=/data/nipeng/2019-10-07-aishell
+data=/data/nipeng/2019-1001-1020-aishell
 
 # exp tag
 tag="" # tag for managing experiments.
