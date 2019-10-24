@@ -1,6 +1,7 @@
 # If a Python interpreter is specified, then creates a virtualenv from it
 # PYTHON := /usr/bin/python3.7
-PYTHON := /root/anaconda3/envs/np-py36-tts/bin/python3
+# PYTHON := /root/anaconda3/envs/np-py36-tts/bin/python3
+PYTHON :=
 # The python version installed in the conda setup
 # NOTE(kan-bayashi): Use 3.7.3 to avoid sentencepiece installation error
 PYTHON_VERSION := 3.6.8
@@ -9,7 +10,8 @@ CUDA_VERSION := 9.0
 # PyTorch version: 0.4.1 or 1.0.0 or 1.0.1
 TH_VERSION := 1.0.0
 # Use a prebuild Kaldi to omit the installation
-KALDI := /data/nipeng/kaldi
+# KALDI := /data/nipeng/kaldi
+KALDI :=
 WGET := wget --tries=3
 
 # Both Miniconda2/3 can install any Python versions
