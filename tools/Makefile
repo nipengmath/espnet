@@ -63,10 +63,11 @@ miniconda.sh:
 	test -f miniconda.sh || $(WGET) $(CONDA_URL) -O miniconda.sh
 venv: miniconda.sh
 	test -d $(PWD)/venv || bash miniconda.sh -b -p $(PWD)/venv
+	. venv/bin/activate && conda update -y conda
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/msys2/
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
-	. venv/bin/activate && conda update -y conda
+	. venv/bin/activate && conda config --set show_channel_urls yes
 	. venv/bin/activate && conda install -y python=$(PYTHON_VERSION)
 	. venv/bin/activate && conda info -a
 espnet.done: venv
