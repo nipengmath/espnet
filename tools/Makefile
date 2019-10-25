@@ -54,6 +54,7 @@ ifneq ($(strip $(PYTHON)),)
 venv:
 	test -d venv || virtualenv -p $(PYTHON) venv
 espnet.done: venv
+	. venv/bin/activate; pip install -U pip
 	. venv/bin/activate; pip install pip --upgrade
 	. venv/bin/activate; pip install -e ..
 	. venv/bin/activate; pip config set global.index-url https://pypi.mirrors.ustc.edu.cn/simple/
