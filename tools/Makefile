@@ -4,7 +4,7 @@
 PYTHON :=
 # The python version installed in the conda setup
 # NOTE(kan-bayashi): Use 3.7.3 to avoid sentencepiece installation error
-PYTHON_VERSION := 3.6.8
+PYTHON_VERSION := 3.7.3
 CUPY_VERSION := 6.0.0
 CUDA_VERSION := 9.0
 # PyTorch version: 0.4.1 or 1.0.0 or 1.0.1
