@@ -29,6 +29,7 @@ mkdir -p $tmp_dir
 # data directory check
 if [ ! -d $aishell_audio_dir ] || [ ! -f $aishell_text ]; then
   echo "Error: $0 requires two directory arguments"
+  echo ${aishell_audio_dir}, ${aishell_text}
   exit 1;
 fi
 
