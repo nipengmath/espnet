@@ -6,6 +6,15 @@
 . ./path.sh || exit 1;
 . ./cmd.sh || exit 1;
 
+if [ $# != 2 ]; then
+  echo "Usage: $0 <data-path> <flag>"
+  exit 1;
+else
+  data=$1  # 输入文件夹。
+  flag=$2  # 唯一标识，防止文件覆盖。
+fi
+
+
 # general configuration
 backend=pytorch
 stage=0        # start from 0 if you need to start from data preparation
@@ -37,7 +46,7 @@ n_average=10
 #data_url=www.openslr.org/resources/33
 
 # data=/data/nipeng/2019-10-07-aishell
-data=/data/nipeng/2019-1001-1020-aishell
+# data=/data/nipeng/2019-1001-1020-aishell
 
 # exp tag
 tag="" # tag for managing experiments.
@@ -53,7 +62,7 @@ set -o pipefail
 train_set=train_sp
 train_dev=dev
 #recog_set="dev test"
-recog_set="infer"
+recog_set=infer_${flag}
 
 # if [ ${stage} -le -1 ] && [ ${stop_stage} -ge -1 ]; then
 #     echo "stage -1: Data Download"
@@ -65,9 +74,9 @@ if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
     ### Task dependent. You have to make data the following preparation part by yourself.
     ### But you can utilize Kaldi recipes in most cases
     echo "stage 0: Data preparation"
-    local/aishell_data_prep_infer.sh ${data}/data_aishell/wav ${data}/data_aishell/transcript
+    local/aishell_data_prep_infer.sh ${data}/data_aishell/wav ${data}/data_aishell/transcript ${flag}
     # remove space in text
-    for x in infer; do
+    for x in ${recog_set}; do
         cp data/${x}/text data/${x}/text.org
         paste -d " " <(cut -f 1 -d" " data/${x}/text.org) <(cut -f 2- -d" " data/${x}/text.org | tr -d " ") \
             > data/${x}/text
@@ -81,7 +90,7 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     ### Task dependent. You have to design training and dev sets by yourself.
     ### But you can utilize Kaldi recipes in most cases
     echo "stage 1: Feature Generation"
-    fbankdir=fbank
+    fbankdir=fbank_${flag}
     # Generate the fbank features; by default 80-dimensional fbanks with pitch on each frame
     # steps/make_fbank_pitch.sh --cmd "$train_cmd" --nj 32 --write_utt2num_frames true \
     #     data/train exp/make_fbank/train ${fbankdir}
@@ -90,8 +99,8 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     #     data/dev exp/make_fbank/dev ${fbankdir}
     # utils/fix_data_dir.sh data/dev
     steps/make_fbank_pitch.sh --cmd "$train_cmd" --nj 10 --write_utt2num_frames true \
-        data/infer exp/make_fbank/infer ${fbankdir}
-    utils/fix_data_dir.sh data/infer
+        data/${recog_set} exp/make_fbank/${recog_set} ${fbankdir}
+    utils/fix_data_dir.sh data/${recog_set}
 
     # # speed-perturbed
     # utils/perturb_data_dir_speed.sh 0.9 data/train data/temp1

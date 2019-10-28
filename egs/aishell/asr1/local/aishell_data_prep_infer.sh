@@ -5,24 +5,27 @@
 
 . ./path.sh || exit 1;
 
-if [ $# != 2 ]; then
-  echo "Usage: $0 <audio-path> <text-path>"
-  echo " $0 /export/a05/xna/data/data_aishell/wav /export/a05/xna/data/data_aishell/transcript"
+if [ $# != 3 ]; then
+  echo "Usage: $0 <audio-path> <text-path> <flag>"
+  echo " $0 /export/a05/xna/data/data_aishell/wav /export/a05/xna/data/data_aishell/transcript uuid"
   exit 1;
 fi
 
 aishell_audio_dir=$1
 aishell_text=$2/aishell_transcript_v0.8.txt.0604.relabeled.0923.v2
+flag=$3
 
 #train_dir=data/local/train
 #dev_dir=data/local/dev
 #test_dir=data/local/test
-infer_dir=data/local/infer
-tmp_dir=data/local/tmp
+raw_infer_dir=data/infer_${flag}
+infer_dir=data/local/infer_${flag}
+tmp_dir=data/local/tmp_${flag}
 
 #mkdir -p $train_dir
 #mkdir -p $dev_dir
 #mkdir -p $test_dir
+mkdir -p $raw_infer_dir
 mkdir -p $infer_dir
 mkdir -p $tmp_dir
 
@@ -56,10 +59,10 @@ for dir in $infer_dir; do
   utils/utt2spk_to_spk2utt.pl $dir/utt2spk > $dir/spk2utt
 done
 
-mkdir -p data/infer
+## mkdir -p data/infer_${flag}
 
 for f in spk2utt utt2spk wav.scp text; do
-  cp $infer_dir/$f data/infer/$f || exit 1;
+  cp $infer_dir/$f ${raw_infer_dir}/$f || exit 1;
 done
 
 echo "$0: AISHELL data preparation succeeded"
