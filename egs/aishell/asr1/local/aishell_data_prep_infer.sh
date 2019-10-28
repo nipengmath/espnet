@@ -12,7 +12,7 @@ if [ $# != 3 ]; then
 fi
 
 aishell_audio_dir=$1
-aishell_text=$2/aishell_transcript_v0.8.txt.0604.relabeled.0923.v2
+aishell_text=$2/aishell_transcript.txt
 flag=$3
 
 #train_dir=data/local/train
@@ -32,6 +32,7 @@ mkdir -p $tmp_dir
 # data directory check
 if [ ! -d $aishell_audio_dir ] || [ ! -f $aishell_text ]; then
   echo "Error: $0 requires two directory arguments"
+  echo ${aishell_audio_dir}, ${aishell_text}
   exit 1;
 fi
 
