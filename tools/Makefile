@@ -85,7 +85,7 @@ espnet.done: venv
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/menpo/
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
 	. venv/bin/activate && conda config --set show_channel_urls yes
-	. venv/bin/activate && conda install -y $(CONDA_PYTORCH) -c pytorch
+	. venv/bin/activate && conda install -y $(CONDA_PYTORCH) pytorch
 	. venv/bin/activate && pip install -e ..
 	touch espnet.done
 endif
