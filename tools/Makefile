@@ -128,7 +128,7 @@ warp-transducer.done: espnet.done
 chainer_ctc.done: espnet.done
 	rm -rf chainer_ctc
 	git clone https://github.com/jheymann85/chainer_ctc.git
-	. venv/bin/activate; pip install cython
+	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ cython
 	. venv/bin/activate; cd chainer_ctc && chmod +x install_warp-ctc.sh && ./install_warp-ctc.sh ; true
 	. venv/bin/activate; cd chainer_ctc && pip install .
 	touch chainer_ctc.done
@@ -147,7 +147,7 @@ mecab.done: espnet.done
 	cd mecab/mecab-ipadic && ./configure --with-charset=utf8 --with-mecab-config=$(PWD)/mecab/bin/mecab-config --prefix=$(PWD)/mecab && $(MAKE) && $(MAKE) install
 	cd mecab && git clone --depth 1 https://github.com/neologd/mecab-ipadic-neologd.git
 	cd mecab/mecab-ipadic-neologd && export PATH=$(PWD)/mecab/bin:$(PATH) && ./bin/install-mecab-ipadic-neologd -n -y -p $(PWD)/mecab/mecab-ipadic-neologd
-	. venv/bin/activate; pip install mojimoji pykakasi
+	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ mojimoji pykakasi
 	. venv/bin/activate; if [ `python --version | cut -c 8` -eq 3 ]; then \
 		if [ ! -e swig.done ]; then \
 			rm -rf swig; \
