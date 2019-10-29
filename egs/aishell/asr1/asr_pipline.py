@@ -7,6 +7,7 @@ if sys.version[0] == '2':
     sys.setdefaultencoding("utf-8")
 
 import os
+import re
 import time
 import json
 import redis
@@ -27,8 +28,8 @@ from kafka.errors import CommitFailedError
 from elasticsearch import Elasticsearch, helpers
 
 
-def norm_aishell_data(indir):
-    outdir = indir + "_norm"
+def norm_aishell_data(indir, outdir):
+    os.system("mkdir -p %s" %outdir)
     for path in os.listdir(indir):
         fname = path.split(".")[0]
         os.system("mkdir -p %s/data_aishell/wav/infer/%s" %(outdir, fname))
@@ -41,7 +42,6 @@ def norm_aishell_data(indir):
     for path in os.listdir(indir):
         fname = path.split(".")[0]
         fout.write("%s %s\n" %(fname, "哈哈"))
-    return outdir
 
 
 def gen_sp_wav_and_get_path_one(wav_temppath, audio_id, sound, item, k):
@@ -104,7 +104,7 @@ def get_parser():
                         help="hkust的绝对目录,即kaldi的hkust目录")
 
     parser.add_argument("-nj", "--num-job",
-                        type=int, default=10,
+                        type=int, default=2,
                         help="hkust num job default 10")
 
     parser.add_argument("-nw", "--num-workers",
@@ -122,6 +122,22 @@ def get_parser():
     parser.add_argument('--is-comp', help='1为补数,0为不进入补数筛选逻辑', default=0, type=int)
     args = parser.parse_args()
     return args
+
+
+class WarnKeyword(object):
+    def __init__(self):
+        kws = ["狗杂种", "操你妈", "傻逼", "他妈的","你妈逼",
+               "狗日的","王八蛋", "妈了个逼","婊子", "去你妈",
+               "我操", "我草","贱人", "被车撞死", "搞死",
+               "密码给我", "老赖","曝通讯录", "所有联系人", "不要脸",
+               "去死","要不要脸", "打爆你",
+        ]
+        self.p_kw = re.compile("|".join(kws))
+
+    def process(self, text):
+        l = self.p_kw.search(text)
+        rst = True if l else False
+        return rst
 
 
 class ASR(object):
@@ -158,6 +174,7 @@ class ASR(object):
                                        max_request_size=1024 * 1024 * 20)
         self.asr_producer_topics = asr_producer_topics  # ASR生产者topic
         self.redis_client = redis.Redis(host='192.168.192.202', port=40029, db=0, password="Q8TYmIwQSHNFbLJ2")
+        self.kw_client = WarnKeyword()
 
         self.is_comp = is_comp
         if is_comp:
@@ -181,6 +198,17 @@ class ASR(object):
                                          auto_offset_reset=self.seg_auto_offset_reset)  # 消费重置偏移量
         self.from_client.subscribe(self.seg_consumer_topics)  # 切分的消费者topic
 
+    def filter_msg_keyword(self, msgs):
+        rst = []
+        for msg in msgs:
+            data = json.loads(msg.value)
+            merge_dict = msg.get("merge_dict")
+            if merge_dict:
+                text = ";".join(merge_dict.values())
+                if self.kw_client.process(text):
+                    rst.append(msg)
+        return rst
+
     def asr_pipline_from_kafka(self, father_path):
         """
         获取kafka的数据流，并进行识别，合并，标点，存入es
@@ -196,22 +224,19 @@ class ASR(object):
             msgs = []
             for tp, _msgs in tp_msgs.items():
                 msgs.extend(_msgs)
-            self.batch_asr_pipline(father_path, msgs)
+
+            ## 从kaldi识别结果中，过滤出包含告警关键词的数据
+            msgs = self.filter_msg_keyword(msgs)
+
+            if msgs:
+                self.batch_asr_pipline(father_path, msgs)
+
 
     def batch_asr_pipline(self, father_path, msgs):
-        """
-        单个kafka消息消费:
-        1)从kafka消息中提取value信息;
-        2)根据msg.value信息从切分好的数据源复制到目标位置;
-        3)进行语音识别,放进merge_dict里;
-        4)写入kafka新的topic;
-        7)删除临时音频的文件夹和语音识别结果的临时文件.
-        :param father_path: 切分来源音频存放父目录;
-        :param msg: 从kafka获取的完整消息;
-        :return:
-        """
         flag = False  # flag 是否语音识别成功并存入kafka
         wav_temppath = tempfile.mkdtemp(prefix="asr_")
+        wav_normpath = wav_temppath + "_norm"
+
         batch_wav_lst = []
         batch_voice_data = {}
         batch_merge_dict = None
@@ -220,33 +245,35 @@ class ASR(object):
             for msg in msgs:
                 if msg is not None:
                     audio_id = json.loads(msg.value).get('audio_id', '')
-                    if not redis_client.get('asr_espnet_' + str(audio_id)):
-                        # step1: 从kafka消息中提取value信息
+                    if not self.redis_client.get('asr_espnet_' + str(audio_id)):
                         voice_data = json.loads(msg.value)
                         voice_data['start_asr_espnet'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
                         batch_voice_data[audio_id] = voice_data  # 后面继续往 voice_data 追加数据
-            # step2：根据msg.value信息获取音频，并按提前提供的音频片段开始结束时间，生成切分后的wav
+
+            # 根据msg.value信息获取音频，并按提前提供的音频片段开始结束时间，生成切分后的wav
             batch_wav_lst = self.gen_sp_wav_and_get_path_mp(father_path, wav_temppath, batch_voice_data)
-            # step3: 语音识别, 并获取merge的text
-            # batch results
-            wav_normpath = norm_aishell_data(wav_temppath)
+            # 语音识别, 并获取merge的text
+            # 整理成espnet需要的数据格式
+            norm_aishell_data(wav_temppath, wav_normpath)
+            # espnet decode
             merge_dict = self._asr_cmd(wav_normpath) if batch_wav_lst else {}
+            # merge batch
             batch_merge_dict = self.split_merge_dict(merge_dict)
         except Exception as e:
-            print("bebefore commit to kafka error log: %s, msg: %s" % (e, ""))
+            print("asr cmd error log: %s, msg: %s" % (e, ""))
         finally:
-            # step7: 删除临时音频的文件夹和语音识别结果的临时文件
+            # 删除临时音频的文件夹和语音识别结果的临时文件
             shutil.rmtree(wav_temppath)
             shutil.rmtree(wav_normpath)
 
         for audio_id, voice_data in batch_voice_data.items():
-            # step4: 写入kafka新的topic
+            # 写入kafka新的topic
             try:
                 voice_data["merge_dict_espnet"] = batch_merge_dict[audio_id]
                 voice_data['end_asr_espnet'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                flag = self._kafka_producers(voice_data) if voice_data.get("merge_dict", {}) else False
+                flag = self._kafka_producers(voice_data) if voice_data.get("merge_dict_espnet", {}) else False
             except Exception as e:
-                print("before commit to kafka error log: %s, msg: %s" % (e, ""))
+                print("kafka producer error log: %s, msg: %s" % (e, ""))
         try:
             self.from_client.commit()
         except CommitFailedError:
