@@ -20,13 +20,13 @@ CONDA_URL := https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.
 GCC_VERSION := $(shell gcc -dumpversion)
 
 
-ifneq ($(shell which nvidia-smi),) # 'nvcc' found
-CONDA_PYTORCH := pytorch=$(TH_VERSION) cudatoolkit=$(CUDA_VERSION)
-CUDA_DEPS := cupy.done
-else
+# ifneq ($(shell which nvidia-smi),) # 'nvcc' found
+# CONDA_PYTORCH := pytorch=$(TH_VERSION) cudatoolkit=$(CUDA_VERSION)
+# CUDA_DEPS := cupy.done
+# else
 CONDA_PYTORCH := pytorch-cpu=$(TH_VERSION)
 CUDA_DEPS :=
-endif
+# endif
 
 
 .PHONY: all clean
@@ -68,16 +68,24 @@ venv: miniconda.sh
 	. venv/bin/activate && conda update -y conda
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/msys2/
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+	. venv/bin/activate && conda config --add channels https://mirror.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/bioconda/
+	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/menpo/
+	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
 	. venv/bin/activate && conda config --set show_channel_urls yes
 	. venv/bin/activate && conda install -y python=$(PYTHON_VERSION)
 	. venv/bin/activate && conda info -a
 espnet.done: venv
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/msys2/
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+	. venv/bin/activate && conda config --add channels https://mirror.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
 	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/bioconda/
+	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/menpo/
+	. venv/bin/activate && conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
 	. venv/bin/activate && conda config --set show_channel_urls yes
-	. venv/bin/activate && conda install -y $(CONDA_PYTORCH) -c pytorch
+	. venv/bin/activate && conda install -y $(CONDA_PYTORCH) pytorch
 	. venv/bin/activate && pip install -e ..
 	touch espnet.done
 endif
