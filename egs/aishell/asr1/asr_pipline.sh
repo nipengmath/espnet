@@ -13,12 +13,12 @@ python3 asr_pipline.py \
   --kafka-host daasoffline1.kafka.dc.puhuifinance.com:6667,daasoffline2.kafka.dc.puhuifinance.com:6667,daasoffline3.kafka.dc.puhuifinance.com:6667,daasoffline4.kafka.dc.puhuifinance.com:6667,daasoffline5.kafka.dc.puhuifinance.com:6667 \
   --seg-consumer-topics sp_sad_topic \
   --seg-consumer-groupid sp_sad_asr_group_np_20191028_v3 \
-  --session-timeout-ms 60000 \
+  --session-timeout-ms 30000 \
   --seg-auto-offset-reset smallest \
   --asr-producer-topics asr_topic1_t1 \
   --father-path /data/mfs/k8s/speech_pipeline/raw \
   --hkust-path /home/app/hkust/kaldi/egs/hkust/s5_daihou \
-  --num-job 40
+  --num-job 10
 #  --is-comp 1
 
 

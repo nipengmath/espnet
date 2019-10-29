@@ -28,7 +28,6 @@ from elasticsearch import Elasticsearch, helpers
 
 
 def norm_aishell_data(indir):
-    # /tmp/asr_9hmlx3zl
     outdir = indir + "_norm"
     for path in os.listdir(indir):
         fname = path.split(".")[0]
@@ -52,8 +51,20 @@ def gen_sp_wav_and_get_path_one(wav_temppath, audio_id, sound, item, k):
     if sp_wav.frame_rate != 8000:
         sp_wav = sp_wav.set_frame_rate(8000)
     sp_wav.export(save_cut_path, format="wav")
-    print("==3", save_cut_path)
     return save_cut_path
+
+
+def load_hyp_file(path):
+    merge_dict = {}
+    with codecs.open(path) as f:
+        for line in f:
+            l = line.split("(")
+            if len(l) == 2:
+                _text, _id = l
+                text = _text.strip().replace(" ", "")
+                path = _id.split("-")[0] + ".wav"
+                merge_dict[path] = text
+    return merge_dict
 
 
 def get_parser():
@@ -101,7 +112,7 @@ def get_parser():
                         help="multiprocess number of workers")
 
     parser.add_argument("-cg", "--consumer-gap",
-                        type=int, default=2,
+                        type=int, default=10,
                         help="kafka consumer msg num")
 
     parser.add_argument("-ptm", "--poll-timeout-ms",
@@ -146,6 +157,7 @@ class ASR(object):
                                        compression_type="gzip",
                                        max_request_size=1024 * 1024 * 20)
         self.asr_producer_topics = asr_producer_topics  # ASR生产者topic
+        self.redis_client = redis.Redis(host='192.168.192.202', port=40029, db=0, password="Q8TYmIwQSHNFbLJ2")
 
         self.is_comp = is_comp
         if is_comp:
@@ -175,7 +187,6 @@ class ASR(object):
         :param father_path: 切分来源音频存放父目录
         :return:
         """
-        # redis_client = redis.Redis(host='192.168.192.202', port=40029, db=0, password="Q8TYmIwQSHNFbLJ2")
         while True:
             if not self.from_client:
                 self._get_from_client()
@@ -185,9 +196,7 @@ class ASR(object):
             msgs = []
             for tp, _msgs in tp_msgs.items():
                 msgs.extend(_msgs)
-            print(len(msgs))
             self.batch_asr_pipline(father_path, msgs)
-            break
 
     def batch_asr_pipline(self, father_path, msgs):
         """
@@ -207,41 +216,35 @@ class ASR(object):
         batch_voice_data = {}
         batch_merge_dict = None
 
-#        try:
-        redis_client = redis.Redis(host='192.168.192.202', port=40029, db=0, password="Q8TYmIwQSHNFbLJ2")
-        for msg in msgs:
-            if msg is not None:
-                audio_id = json.loads(msg.value).get('audio_id', '')
-                print("==2", audio_id)
-                if not redis_client.get('asr_espnet_' + str(audio_id)):
-                    # step1: 从kafka消息中提取value信息
-                    voice_data = json.loads(msg.value)
-                    voice_data['start_asr'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                    batch_voice_data[audio_id] = voice_data  # 后面继续往 voice_data 追加数据
-        # step2：根据msg.value信息获取音频，并按提前提供的音频片段开始结束时间，生成切分后的wav
-        batch_wav_lst = self.gen_sp_wav_and_get_path_mp(father_path, wav_temppath, batch_voice_data)
-        # step3: 语音识别, 并获取merge的text
-        # batch results
-        print("==4", wav_temppath)
-        wav_normpath = norm_aishell_data(wav_temppath)
-        merge_dict = self._asr_cmd(wav_normpath) if batch_wav_lst else {}
-        #batch_merge_dict = self.split_merge_dict(merge_dict)
-#        except Exception as e:
-#            print("bebefore commit to kafka error log: %s, msg: %s" % (e, ""))
-#        finally:
-#            # step7: 删除临时音频的文件夹和语音识别结果的临时文件
-#            #shutil.rmtree(wav_temppath)
-#            pass
-        return
+        try:
+            for msg in msgs:
+                if msg is not None:
+                    audio_id = json.loads(msg.value).get('audio_id', '')
+                    if not redis_client.get('asr_espnet_' + str(audio_id)):
+                        # step1: 从kafka消息中提取value信息
+                        voice_data = json.loads(msg.value)
+                        voice_data['start_asr_espnet'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                        batch_voice_data[audio_id] = voice_data  # 后面继续往 voice_data 追加数据
+            # step2：根据msg.value信息获取音频，并按提前提供的音频片段开始结束时间，生成切分后的wav
+            batch_wav_lst = self.gen_sp_wav_and_get_path_mp(father_path, wav_temppath, batch_voice_data)
+            # step3: 语音识别, 并获取merge的text
+            # batch results
+            wav_normpath = norm_aishell_data(wav_temppath)
+            merge_dict = self._asr_cmd(wav_normpath) if batch_wav_lst else {}
+            batch_merge_dict = self.split_merge_dict(merge_dict)
+        except Exception as e:
+            print("bebefore commit to kafka error log: %s, msg: %s" % (e, ""))
+        finally:
+            # step7: 删除临时音频的文件夹和语音识别结果的临时文件
+            shutil.rmtree(wav_temppath)
+            shutil.rmtree(wav_normpath)
 
         for audio_id, voice_data in batch_voice_data.items():
             # step4: 写入kafka新的topic
             try:
-                voice_data["merge_dict"] = batch_merge_dict[audio_id]
-                voice_data['end_asr'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                voice_data["merge_dict_espnet"] = batch_merge_dict[audio_id]
+                voice_data['end_asr_espnet'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
                 flag = self._kafka_producers(voice_data) if voice_data.get("merge_dict", {}) else False
-                voice_data['step4_end_time'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                print("asr_output:", json.dumps(voice_data, ensure_ascii=True))
             except Exception as e:
                 print("before commit to kafka error log: %s, msg: %s" % (e, ""))
         try:
@@ -249,7 +252,7 @@ class ASR(object):
         except CommitFailedError:
             print('commit error!')
             for audio_id, _ in batch_voice_data.items():
-                redis_client.set('asr_espnet_' + str(audio_id), 1, ex=24 * 3600)
+                self.redis_client.set('asr_espnet_' + str(audio_id), 1, ex=24 * 3600)
 
         return flag
 
@@ -300,57 +303,6 @@ class ASR(object):
                 raise RuntimeError('This data segments is null !')
         self.comp_num += 1
 
-    def _copy_wav(self, father_path, voice_data, temp_path):
-        """
-        step2: 根据msg信息从切分好的数据源复制到目标位置
-        :param father_path: 切分来源音频存放父目录
-        :param voice_data: kafka来源信息中的包含切分音频的信息
-        :param temp_path: 音频复制目标目录
-        :return: wav_lst:
-        """
-        source = voice_data.get("source", "")
-        date = voice_data.get("date", "")
-        audio_id = voice_data.get("audio_id", "")
-
-        value_dict = voice_data.get("segments", {})
-        wav_lst = []  # 音频list
-
-        for chn, split_time in value_dict.items():
-            for si in split_time:
-                split_path = "%s_%s_%s_%s.wav" % (audio_id, si.get("start"), si.get("end"), chn)
-                wav_path = os.path.join(father_path, source, date, audio_id, split_path)
-                shutil.copy(wav_path, temp_path)
-                wav_lst.append(wav_path)
-        return wav_lst
-
-    def gen_sp_wav_and_get_path(self, father_path, wav_temppath, voice_data):
-        """
-        step2: 根据msg信息获取音频，并按提前提供的音频片段开始结束时间，生成切分后的wav
-        :param father_path: 音频来源目录,结果存储
-        :param wav_temppath: kafka来源信息中的包含切分音频的信息
-        :return: wav_lst:
-        """
-        wav_lst = []  # wav 音频存储
-        source = voice_data["source"]
-        code = None if source != 'infobird' else 'pcm_s16le'
-        date = voice_data["date"]
-        audio_id = voice_data["audio_id"]
-        wav_father_path = os.path.join(father_path, source, date)  # /data/mfs/k8s/speech_pipeline/raw/{source}/{date}
-        for k, v in voice_data['segments'].items():
-            if k in ["gk", "kf"] and len(v) > 0:
-                wav_name = "%s_%s.wav" % (audio_id, k)
-                raw_wav_path = os.path.join(wav_father_path, wav_name)
-                sound = AudioSegment.from_file(raw_wav_path, codec=code, format="wav")
-                for item in v:
-                    cut_wav_name = "%s_%s_%s_%s.wav" % (audio_id, item['start'], item['end'], k)
-                    save_cut_path = os.path.join(wav_temppath, cut_wav_name)
-                    sp_wav = sound[int(item['start']):int(item['end'])]
-                    if sp_wav.frame_rate != 8000:
-                        sp_wav = sp_wav.set_frame_rate(8000)
-                    sp_wav.export(save_cut_path, format="wav")
-                    wav_lst.append(save_cut_path)
-        return wav_lst
-
     def gen_sp_wav_and_get_path_mp(self, father_path, wav_temppath, batch_voice_data):
         """
         multiprocess generator
@@ -388,10 +340,24 @@ class ASR(object):
         :param wav_path: 需识别音频存放目录
         :return:
         """
-        decode_cmd = "./infer.sh {}".format(wav_path)
-        print(decode_cmd)
+        flag = wav_path.split("/")[-1].replace("asr", "").replace("norm", "")
+        decode_cmd = "./infer.sh {} {} {}".format(wav_path, flag, self.num_job)
         os.system(decode_cmd)
-        ## return merge_dict
+        decode_path = "exp/train_sp_pytorch_train/decode_infer_%s_decode_lm/hyp.trn" %flag
+        merge_dict = load_hyp_file(decode_path)
+
+        ## 删除临时目录
+        data_dir = "data/infer_%s" %flag
+        fbank_dir = "fbank_%s" %flag
+        dump_dir = "dump/infer_%s" %flag
+        decode_dir = "exp/train_sp_pytorch_train/decode_infer_%s_decode_lm" %flag
+        dump_feats_dir = "exp/dump_feats/recog/infer_%s" %flag
+        make_fbank_dir = "exp/make_fbank/infer_%s" %flag
+
+        for _dir in [data_dir, fbank_dir, dump_dir, dump_feats_dir, make_fbank_dir, decode_dir]:
+            os.system("rm -rf %s" %_dir)
+
+        return merge_dict
 
     def _kafka_producers(self, voice_data):
         """

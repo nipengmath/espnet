@@ -6,12 +6,13 @@
 . ./path.sh || exit 1;
 . ./cmd.sh || exit 1;
 
-if [ $# != 2 ]; then
-  echo "Usage: $0 <data-path> <flag>"
+if [ $# != 3 ]; then
+  echo "Usage: $0 <data-path> <flag> <num_workers>"
   exit 1;
 else
   data=$1  # 输入文件夹。
   flag=$2  # 唯一标识，防止文件覆盖。
+  nj_decoder=$3 # decode workers
 fi
 
 
@@ -223,7 +224,7 @@ expdir=exp/${expname}
 
 if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
     echo "stage 5: Decoding"
-    nj=40
+    nj=${nj_decoder}
     if [[ $(get_yaml.py ${train_config} model-module) = *transformer* ]]; then
 	recog_model=model.last${n_average}.avg.best
 	# average_checkpoints.py --backend ${backend} \
