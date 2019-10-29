@@ -388,7 +388,10 @@ class ASR(object):
         :param wav_path: 需识别音频存放目录
         :return:
         """
-        decode_cmd = "./infer.sh {}".format(wav_path)
+        print("==1", wav_path)
+        flag = wav_path.split("_")[-2]
+        print(flag)
+        decode_cmd = "./infer.sh {} {}".format(wav_path, flag)
         print(decode_cmd)
         os.system(decode_cmd)
         ## return merge_dict
