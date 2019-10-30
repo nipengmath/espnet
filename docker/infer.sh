@@ -24,11 +24,11 @@ do
                     eval ${ext}=$2
                     frombreak=false
                     break 2
-                  fi 
-                done 
+                  fi
+                done
               done
               if ${frombreak} ; then
-                echo "bad option $1" 
+                echo "bad option $1"
                 exit 1
               fi
               ;;
@@ -47,7 +47,7 @@ fi
 from_tag="cpu"
 if [ ! "${docker_gpu}" == "-1" ]; then
   if [ -z "${docker_cuda}" ]; then
-    # If the docker_cuda is not set, the program will automatically 
+    # If the docker_cuda is not set, the program will automatically
     # search the installed version with default configurations (apt)
     docker_cuda=$( nvcc -V | grep release )
     docker_cuda=${docker_cuda#*"release "}
@@ -75,7 +75,7 @@ fi
 if [ ${docker_user} = true ]; then
   # Build a container with the user account
   container_tag="${from_tag}-user-${HOME##*/}"
-  docker_image=$( docker images -q espnet/espnet:${container_tag} ) 
+  docker_image=$( docker images -q espnet/espnet:${container_tag} )
   if ! [[ -n ${docker_image}  ]]; then
     echo "Building docker image..."
     build_args="--build-arg FROM_TAG=${from_tag}"
@@ -130,7 +130,7 @@ if [ ! -z "${docker_env}" ]; then
   docker_env=$(echo ${docker_env} | tr "," "\n")
   for i in ${docker_env[@]}
   do
-    this_env="-e $i ${this_env}" 
+    this_env="-e $i ${this_env}"
   done
 fi
 

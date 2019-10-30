@@ -59,7 +59,7 @@ espnet.done: venv
 	. venv/bin/activate; pip install -e ..
 	. venv/bin/activate; pip config set global.index-url https://pypi.mirrors.ustc.edu.cn/simple/
 	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ torch==$(TH_VERSION)
-	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ redis kafka elasticsearch
+	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ redis kafka-python elasticsearch pydub
 	touch espnet.done
 else
 miniconda.sh:

@@ -11,7 +11,6 @@ import re
 import time
 import json
 import redis
-import jieba
 import codecs
 import shutil
 import hashlib
@@ -25,7 +24,6 @@ from multiprocessing import cpu_count
 from pydub import AudioSegment
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import CommitFailedError
-from elasticsearch import Elasticsearch, helpers
 
 
 def norm_aishell_data(indir, outdir):
@@ -104,8 +102,8 @@ def get_parser():
                         help="hkust的绝对目录,即kaldi的hkust目录")
 
     parser.add_argument("-nj", "--num-job",
-                        type=int, default=2,
-                        help="hkust num job default 10")
+                        type=int, default=10,
+                        help="espnet decode num job default 10")
 
     parser.add_argument("-nw", "--num-workers",
                         type=int, default=18,
@@ -119,12 +117,11 @@ def get_parser():
                         type=int, default=60000,
                         help="")
 
-    parser.add_argument('--is-comp', help='1为补数,0为不进入补数筛选逻辑', default=0, type=int)
     args = parser.parse_args()
     return args
 
 
-class WarnKeyword(object):
+class DetectAlarmKeyword(object):
     def __init__(self):
         kws = ["狗杂种", "操你妈", "傻逼", "他妈的","你妈逼",
                "狗日的","王八蛋", "妈了个逼","婊子", "去你妈",
@@ -135,15 +132,14 @@ class WarnKeyword(object):
         self.p_kw = re.compile("|".join(kws))
 
     def process(self, text):
-        l = self.p_kw.search(text)
-        rst = True if l else False
+        rst = self.p_kw.findall(text)
         return rst
 
 
 class ASR(object):
     def __init__(self, kafka_servers, seg_consumer_topics, seg_consumer_groupid,
                  session_timeout_ms=60000, seg_auto_offset_reset="largest",
-                 asr_producer_topics="asr_topic1", num_job=10, is_comp=0,
+                 asr_producer_topics="asr_topic1", num_job=10,
                  poll_timeout_ms=60000, consumer_gap=None, num_workers=cpu_count()):
         """
         :param kafka_servers: kafka host:port
@@ -154,7 +150,6 @@ class ASR(object):
                                   源码定义: {'smallest': 'earliest', 'largest': 'latest'}
         :param asr_producer_topics: 语音是被的生产者topic,默认值:asr_topic1
         :param num_job: 语音识别的线程数
-        :param is_comp: 是否为补数逻辑,是的话会进入时间判断和es数据判断
         """
         self.kafka_servers = kafka_servers
         self.seg_consumer_groupid = seg_consumer_groupid
@@ -174,20 +169,7 @@ class ASR(object):
                                        max_request_size=1024 * 1024 * 20)
         self.asr_producer_topics = asr_producer_topics  # ASR生产者topic
         self.redis_client = redis.Redis(host='192.168.192.202', port=40029, db=0, password="Q8TYmIwQSHNFbLJ2")
-        self.kw_client = WarnKeyword()
-
-        self.is_comp = is_comp
-        if is_comp:
-            self.comp_num = 0
-            self.prop = {"HOST1": "192.168.40.37",
-                         "HOST2": "192.168.40.38",
-                         "HOST3": "192.168.40.39",
-                         "PORT": "9200",
-                         "DOC_TYPE": "kf_infobird_call"}
-
-            self.es = Elasticsearch(hosts=[{'host': self.prop['HOST1'], 'port': self.prop['PORT']},
-                                           {'host': self.prop['HOST2'], 'port': self.prop['PORT']},
-                                           {'host': self.prop['HOST3'], 'port': self.prop['PORT']}])
+        self.kw_client = DetectAlarmKeyword()
 
     def _get_from_client(self):
         # 消费者切分好的音频kafka消费者
@@ -198,15 +180,13 @@ class ASR(object):
                                          auto_offset_reset=self.seg_auto_offset_reset)  # 消费重置偏移量
         self.from_client.subscribe(self.seg_consumer_topics)  # 切分的消费者topic
 
-    def filter_msg_keyword(self, msgs):
-        rst = []
-        for msg in msgs:
-            data = json.loads(msg.value)
-            merge_dict = msg.get("merge_dict")
-            if merge_dict:
-                text = ";".join(merge_dict.values())
-                if self.kw_client.process(text):
-                    rst.append(msg)
+    def check_alarm_keyword(self, merge_dict):
+        rst = None
+        if merge_dict:
+            text = ";".join(merge_dict.values())
+            kw_rsp = self.kw_client.process(text)
+            if kw_rsp:
+                rst = kw_rsp
         return rst
 
     def asr_pipline_from_kafka(self, father_path):
@@ -225,11 +205,7 @@ class ASR(object):
             for tp, _msgs in tp_msgs.items():
                 msgs.extend(_msgs)
 
-            ## 从kaldi识别结果中，过滤出包含告警关键词的数据
-            msgs = self.filter_msg_keyword(msgs)
-
-            if msgs:
-                self.batch_asr_pipline(father_path, msgs)
+            self.batch_asr_pipline(father_path, msgs)
 
 
     def batch_asr_pipline(self, father_path, msgs):
@@ -238,7 +214,10 @@ class ASR(object):
         wav_normpath = wav_temppath + "_norm"
 
         batch_wav_lst = []
+        # 所有数据
         batch_voice_data = {}
+        # 包含报警关键词的数据
+        batch_voice_data_imp = {}
         batch_merge_dict = None
 
         try:
@@ -247,31 +226,34 @@ class ASR(object):
                     audio_id = json.loads(msg.value).get('audio_id', '')
                     if not self.redis_client.get('asr_espnet_' + str(audio_id)):
                         voice_data = json.loads(msg.value)
-                        voice_data['start_asr_espnet'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                        batch_voice_data[audio_id] = voice_data  # 后面继续往 voice_data 追加数据
+                        batch_voice_data[audio_id] = voice_data
+                        if self.check_alarm_keyword(voice_data.get("merge_dict")):
+                            voice_data['start_asr_espnet'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                            batch_voice_data_imp[audio_id] = voice_data
 
-            # 根据msg.value信息获取音频，并按提前提供的音频片段开始结束时间，生成切分后的wav
-            batch_wav_lst = self.gen_sp_wav_and_get_path_mp(father_path, wav_temppath, batch_voice_data)
-            # 语音识别, 并获取merge的text
-            # 整理成espnet需要的数据格式
-            norm_aishell_data(wav_temppath, wav_normpath)
-            # espnet decode
-            merge_dict = self._asr_cmd(wav_normpath) if batch_wav_lst else {}
-            # merge batch
-            batch_merge_dict = self.split_merge_dict(merge_dict)
+            if batch_voice_data_imp:
+                batch_wav_lst = self.gen_sp_wav_and_get_path_mp(father_path, wav_temppath, batch_voice_data_imp)
+                norm_aishell_data(wav_temppath, wav_normpath)
+                merge_dict = self._asr_cmd(wav_normpath) if batch_wav_lst else {}
+                batch_merge_dict = self.split_merge_dict(merge_dict)
         except Exception as e:
-            print("asr cmd error log: %s, msg: %s" % (e, ""))
+           print("asr cmd error log: %s, msg: %s" % (e, ""))
         finally:
             # 删除临时音频的文件夹和语音识别结果的临时文件
-            shutil.rmtree(wav_temppath)
-            shutil.rmtree(wav_normpath)
+            os.system("rm -rf %s" %wav_temppath)
+            os.system("rm -rf %s" %wav_normpath)
 
         for audio_id, voice_data in batch_voice_data.items():
-            # 写入kafka新的topic
             try:
-                voice_data["merge_dict_espnet"] = batch_merge_dict[audio_id]
-                voice_data['end_asr_espnet'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                flag = self._kafka_producers(voice_data) if voice_data.get("merge_dict_espnet", {}) else False
+                if batch_merge_dict and audio_id in batch_merge_dict:
+                    voice_data["merge_dict_espnet"] = batch_merge_dict[audio_id]
+                    voice_data['end_asr_espnet'] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                    _alarm_rsp = self.check_alarm_keyword(batch_merge_dict[audio_id])
+                    if _alarm_rsp:
+                        voice_data["has_alarm_keyword"] = True
+                        voice_data["alarm_keywords"] = json.dumps(_alarm_rsp)
+                        voice_data["asr_model"] = "espnet_20191030"
+                flag = self._kafka_producers(voice_data)
             except Exception as e:
                 print("kafka producer error log: %s, msg: %s" % (e, ""))
         try:
@@ -295,40 +277,6 @@ class ASR(object):
             audio_id = wav_file.split("_")[0]
             split_dict[audio_id][wav_file] = text
         return split_dict
-
-    def filter_conditions(self, voice_data):
-        """
-        筛选出不需要补数的数据,并抛出异常;
-        :param voice_data:
-        :return:
-        """
-        end_sad = voice_data.get("end_sad", "0000-00-00 00:00:00")
-        audio_id = voice_data.get("audio_id", None)
-        body = {
-            "query": {"bool": {"must": [{"term": {"audio_id.keyword": audio_id}}], "must_not": [], "should": []}},
-            "from": 0, "size": 10, "sort": [], "aggs": {}}
-        if end_sad < "2019-07-11 12:00:00" or end_sad > "2019-07-11 21:00:00":
-            raise RuntimeError('This one\'s end_sad not in time window !')
-        query = self.es.search(index="asr_text",
-                               doc_type=self.prop['DOC_TYPE'],
-                               scroll='5m',
-                               timeout='30s',
-                               body=body)
-        results = query['hits']['hits']  # es查询出的结果第一页
-        total = query['hits']['total']  # es查询出的结果总量
-        print("audio_id:", audio_id, "search num:", total, ",end_sad", end_sad)
-        if total > 0:
-            line = results[0]["_source"]
-            if line.get("cut_text"):
-                raise RuntimeError('This id already exists and already asr !')
-        else:
-            segments = voice_data.get("segments", {})
-            for k, v in segments.items():
-                if k in ["gk", "kf"] and len(v) > 0:
-                    break
-            else:
-                raise RuntimeError('This data segments is null !')
-        self.comp_num += 1
 
     def gen_sp_wav_and_get_path_mp(self, father_path, wav_temppath, batch_voice_data):
         """
@@ -424,7 +372,6 @@ if __name__ == '__main__':
     seg_consumer_groupid, asr_producer_topics = args.seg_consumer_groupid, args.asr_producer_topics  # 语音识别生产者参数
     father_path, hkust_path = args.father_path, args.hkust_path  # 音频与模型相关参数
     num_job = args.num_job  # 线程数
-    is_comp = args.is_comp  # 是否走补数过滤流程
     poll_timeout_ms = args.poll_timeout_ms
     consumer_gap = args.consumer_gap
     num_workers = args.num_workers
@@ -440,7 +387,7 @@ if __name__ == '__main__':
         seg_consumer_topics = [seg_consumer_topics, ]
     asr = ASR(kafka_servers=kafka_host, seg_consumer_topics=seg_consumer_topics, session_timeout_ms=session_timeout_ms,
               seg_consumer_groupid=seg_consumer_groupid, seg_auto_offset_reset=seg_auto_offset_reset,
-              asr_producer_topics=asr_producer_topics, num_job=num_job, is_comp=is_comp,
+              asr_producer_topics=asr_producer_topics, num_job=num_job,
               poll_timeout_ms=poll_timeout_ms, consumer_gap=consumer_gap, num_workers=num_workers)
 
     asr.asr_pipline_from_kafka(father_path)
