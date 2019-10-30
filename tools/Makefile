@@ -59,7 +59,7 @@ espnet.done: venv
 	. venv/bin/activate; pip install -e ..
 	. venv/bin/activate; pip config set global.index-url https://pypi.mirrors.ustc.edu.cn/simple/
 	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ torch==$(TH_VERSION)
-	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ redis kafka-python elasticsearch pydub
+	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ redis kafka-python pydub
 	touch espnet.done
 else
 miniconda.sh:
@@ -88,7 +88,7 @@ espnet.done: venv
 	. venv/bin/activate && conda config --set show_channel_urls yes
 	. venv/bin/activate && conda install -y $(CONDA_PYTORCH) pytorch
 	. venv/bin/activate && pip install -e ..
-	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ redis kafka elasticsearch
+	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ redis kafka pydub
 	touch espnet.done
 endif
 
