@@ -88,7 +88,7 @@ espnet.done: venv
 	. venv/bin/activate && conda config --set show_channel_urls yes
 	. venv/bin/activate && conda install -y $(CONDA_PYTORCH) pytorch
 	. venv/bin/activate && pip install -e ..
-	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ redis kafka pydub
+	. venv/bin/activate; pip install --index https://pypi.mirrors.ustc.edu.cn/simple/ redis kafka-python pydub
 	touch espnet.done
 endif
 
